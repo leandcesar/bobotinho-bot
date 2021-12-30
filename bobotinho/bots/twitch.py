@@ -12,7 +12,7 @@ from twitchio.ext.commands import (
     Cooldown,
 )
 from twitchio.ext.commands.errors import (
-    CheckFailure,
+    CheckFailed,
     CommandNotFound,
     CommandOnCooldown,
     MissingRequiredArgument,
@@ -21,15 +21,15 @@ from twitchio.ext.routines import Routine
 from twitchio.message import Message
 
 from bobotinho import log
-from bobotinho.apis import AI, Analytics
+from bobotinho.apis import Analytics
 from bobotinho.database.models import Channel, User
 from bobotinho.exceptions import (
-    BotIsOffline,
-    CommandIsDisabled,
-    ContentHasBanword,
-    GameIsAlreadyRunning,
-    InvalidName,
-    UserIsNotAllowed,
+    BotOffline,
+    CommandDisabled,
+    InappropriateMessage,
+    AlreadyPlaying,
+    InvalidUser,
+    UserNotAllowed,
 )
 from bobotinho.utils import convert
 
@@ -42,7 +42,6 @@ class Ctx(Context):
     def __init__(self, message: Message, bot: Bot, **kwargs) -> None:
         super().__init__(message, bot, **kwargs)
         self.response: Optional[str] = None
-        self.prediction: dict = {}
         self.user: User = None
 
     def __iter__(self):
@@ -94,31 +93,31 @@ class Check:
     @staticmethod
     def allowed(ctx: Ctx) -> bool:
         if not Role.any(ctx) and convert.str2url(ctx.message.content) is not None:
-            raise UserIsNotAllowed(channel=ctx.channel.name, user=ctx.author.name)
+            raise UserNotAllowed
         return True
 
     @staticmethod
     def banword(ctx: Ctx) -> bool:
         if any(word in ctx.message.content for word in ctx.bot.channels[ctx.channel.name]["banwords"]):
-            raise ContentHasBanword(channel=ctx.channel.name, content=ctx.message.content)
+            raise InappropriateMessage
         return True
 
     @staticmethod
     def enabled(ctx: Ctx) -> bool:
         if ctx.command.name in ctx.bot.channels[ctx.channel.name]["disabled"]:
-            raise CommandIsDisabled(channel=ctx.channel.name, command=ctx.command.name)
+            raise CommandDisabled
         return True
 
     @staticmethod
     def game(ctx: Ctx) -> bool:
         if ctx.bot.cache.get(f"game-{ctx.channel.name}"):
-            raise GameIsAlreadyRunning(channel=ctx.channel.name, command=ctx.command.name)
+            raise AlreadyPlaying
         return True
 
     @staticmethod
     def online(ctx: Ctx) -> bool:
         if not ctx.bot.channels[ctx.channel.name]["online"]:
-            raise BotIsOffline(channel=ctx.channel.name)
+            raise BotOffline
         return True
 
 
@@ -131,7 +130,6 @@ class TwitchBot(Bot):
             case_insensitive=True,
         )
         self.plataform = "Twitch"
-        self.mentions: bool = config.ai_url and config.ai_key
         self.dev: str = config.dev
         self.site: str = config.site_url
         self.blocked: list = []
@@ -139,6 +137,7 @@ class TwitchBot(Bot):
         self.routines: list = []
         self.channels: dict = {}
         self.cache: object = None
+        self.analytics = Analytics(config.api.analytics_key) if config.api.analytics_key else None
 
     async def start(self) -> None:
         await self.connect()
@@ -263,7 +262,12 @@ class TwitchBot(Bot):
             log.error(e, extra={"ctx": dict(ctx)})
         else:
             log.info(f"#{ctx.channel.name} @{self.nick}: {ctx.response}")
-            await Analytics.sent(ctx)
+            await self.analytics.sent(
+                author_id=ctx.author.id,
+                author_name=ctx.author.name,
+                channel_name=ctx.channel.name,
+                message=ctx.response,
+            )
             return True
         return False
 
@@ -274,9 +278,13 @@ class TwitchBot(Bot):
             return False
         if not ctx.is_valid:
             return False
-        if not ctx.prediction:
-            log.info(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.message.content}")
-            await Analytics.received(ctx)
+        log.info(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.message.content}")
+        self.analytics.received(
+            author_id=ctx.author.id,
+            author_name=ctx.author.name,
+            channel_name=ctx.channel.name,
+            message=ctx.message.content,
+        )
         if not ctx.user:
             ctx.user, _ = await User.get_or_create(
                 id=ctx.author.id,
@@ -293,27 +301,6 @@ class TwitchBot(Bot):
             ctx.response = ctx.command.usage
         except Exception as e:
             log.error(e, extra={"ctx": dict(ctx)})
-        return await self.reply(ctx)
-
-    async def handle_mentions(self, ctx: Ctx) -> bool:
-        if ctx.response:
-            return False
-        if not self.mentions:
-            return False
-        if not ctx.message.content.startswith((self.nick, f"@{self.nick}")):
-            return False
-        log.info(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.message.content}")
-        await Analytics.received(ctx)
-        content: str = ctx.message.content.partition(" ")[2]
-        prediction: dict = await AI.predict(content)
-        intent: str = prediction["intent"]
-        entity: str = prediction["entity"]
-        confidence: float = prediction["confidence"]
-        if intent and confidence > 0.75:
-            ctx.message.content: str = f"{self._prefix}{intent} {entity}".strip()
-            ctx.response = AI.small_talk(intent)
-            return await self.handle_commands(ctx)
-        ctx.response = 'não entendi isso, mas tente ver meus comandos digitando "%help"'
         return await self.reply(ctx)
 
     async def handle_listeners(self, ctx: Ctx) -> bool:
@@ -338,17 +325,17 @@ class TwitchBot(Bot):
             self._connection._cache.pop(channel)
 
     async def event_command_error(self, ctx: Ctx, e: Exception) -> None:
-        if isinstance(e, CommandIsDisabled):
+        if isinstance(e, CommandDisabled):
             ctx.response = "esse comando está desativado nesse canal"
-        elif isinstance(e, ContentHasBanword):
+        elif isinstance(e, InappropriateMessage):
             ctx.response = "sua mensagem contém um termo banido"
-        elif isinstance(e, UserIsNotAllowed):
+        elif isinstance(e, UserNotAllowed):
             ctx.response = "apenas inscritos, VIPs e MODs podem enviar links"
-        elif isinstance(e, InvalidName):
+        elif isinstance(e, InvalidUser):
             ctx.response = "nome de usuário inválido"
-        elif isinstance(e, GameIsAlreadyRunning):
+        elif isinstance(e, AlreadyPlaying):
             ctx.response = "um jogo já está em andamento nesse canal"
-        elif isinstance(e, (BotIsOffline, CommandOnCooldown, CommandNotFound, CheckFailure)):
+        elif isinstance(e, (BotOffline, CommandOnCooldown, CommandNotFound, CheckFailed)):
             log.info(e)
         else:
             ctx.response = "ocorreu um erro inesperado"
@@ -365,5 +352,4 @@ class TwitchBot(Bot):
         ctx: Ctx = await self.get_context(message, cls=Ctx)
         ctx.user = await User.update_or_none(ctx)
         await self.handle_listeners(ctx)
-        await self.handle_mentions(ctx)
         await self.handle_commands(ctx)

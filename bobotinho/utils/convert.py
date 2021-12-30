@@ -7,7 +7,7 @@ from emoji import demojize
 from typing import Union, Optional
 from unidecode import unidecode
 
-from bobotinho.exceptions import InvalidName
+from bobotinho.exceptions import InvalidUser
 
 
 def datetime2str(target: datetime) -> str:
@@ -72,7 +72,7 @@ def str2int(target: Optional[str]) -> Optional[int]:
 def str2hexcode(target: Optional[str]) -> Optional[str]:
     if not target:
         return None
-    if match := re.match(r"#(?:[0-9A-Fa-f]{6})$", target):
+    if match := re.match(r"^#(?:[0-9a-fA-F]{3}){1,2}$", target):
         return match.group(0)
 
 
@@ -86,7 +86,7 @@ def str2name(target: str, default: Optional[str] = None) -> Optional[str]:
             target = target[:-1]
         if target.replace("_", "").isalnum() and unidecode(target) == target:
             return target.lower()
-    raise InvalidName()
+    raise InvalidUser
 
 
 def str2url(target: str) -> Optional[str]:

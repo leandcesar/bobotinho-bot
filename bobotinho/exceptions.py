@@ -2,46 +2,56 @@
 
 
 class BobotinhoException(Exception):
-    pass
+    """Base exception class for Bobotinho."""
 
 
-class CheckException(BobotinhoException):
-    pass
+class CheckFailed(BobotinhoException):
+    """A command check failed occurred."""
+
+
+class DatabaseException(BobotinhoException):
+    """A database operation exception occurred."""
+
+
+class InvalidArgument(BobotinhoException):
+    """An invalid argument has been passed."""
 
 
 class RequestException(BobotinhoException):
-    pass
+    """An HTTP exception occurred."""
 
 
-class BotIsOffline(CheckException):
-    def __init__(self, *, channel: str) -> None:
-        super().__init__(f"Bot is offline on '{channel}' channel.")
+class BotOffline(CheckFailed):
+    """Bobotinho is offline on channel."""
 
 
-class ContentHasBanword(CheckException):
-    def __init__(self, *, channel: str, content: str) -> None:
-        super().__init__(f"'{content}' content has a banword on '{channel}' channel.")
+class InappropriateMessage(CheckFailed):
+    """Content message has a inappropiate word on channel"""
 
 
-class CommandIsDisabled(CheckException):
-    def __init__(self, *, channel: str, command: str) -> None:
-        super().__init__(f"'{command}' command is disabled on '{channel}' channel.")
+class CommandDisabled(CheckFailed):
+    """Command is disabled on channel."""
 
 
-class UserIsNotAllowed(CheckException):
-    def __init__(self, *, channel: str, user: str) -> None:
-        super().__init__(f"'{user}' user is not allowed to send links on '{channel}' channel.")
+class UserNotAllowed(CheckFailed):
+    """User is not allowed to send link on channel."""
 
 
-class GameIsAlreadyRunning(CheckException):
-    def __init__(self, *, channel: str, command: str) -> None:
-        super().__init__(f"'{command}' failed because another game is already running on '{channel}' channel.")
+class AlreadyPlaying(CheckFailed):
+    """One game is already running on channel."""
 
 
-class InvalidName(BobotinhoException):
-    pass
+class InvalidChannel(InvalidArgument):
+    """An invalid channel name was passed."""
 
 
-class WebhookUrlNotDefined(RequestException):
-    def __init__(self, resource: str) -> None:
-        super().__init__(f"{resource} webhook URL not defined, webhook not sent.")
+class InvalidUser(InvalidArgument):
+    """An invalid user name was passed."""
+
+
+class IntegrationException(RequestException):
+    """An HTTP exception occurred in API integration."""
+
+
+class WebhookException(RequestException):
+    """An HTTP exception occurred in webhooks."""
