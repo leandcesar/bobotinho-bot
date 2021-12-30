@@ -4,4 +4,4 @@ aliases = ["pix", "paypal", "picpay"]
 
 
 async def command(ctx):
-    ctx.response = f"me ajude a continuar vivo! {ctx.bot.site}/donate"
+    ctx.response = f"me ajude a continuar vivo! {ctx.bot.config.site_url}/donate"

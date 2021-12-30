@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 import inspect
-import os
-from importlib import import_module, types
 from typing import Optional
 
 from twitchio.ext.commands import (
@@ -17,7 +15,6 @@ from twitchio.ext.commands.errors import (
     CommandOnCooldown,
     MissingRequiredArgument,
 )
-from twitchio.ext.routines import Routine
 from twitchio.message import Message
 
 from bobotinho import log
@@ -55,7 +52,7 @@ class Ctx(Context):
 class Role:
     @staticmethod
     def dev(ctx: Ctx) -> bool:
-        return ctx.author.name == ctx.bot.dev
+        return ctx.author.name == ctx.bot.config.dev
 
     @staticmethod
     def owner(ctx: Ctx) -> bool:
@@ -129,14 +126,12 @@ class TwitchBot(Bot):
             prefix=config.prefix,
             case_insensitive=True,
         )
-        self.plataform = "Twitch"
-        self.dev: str = config.dev
-        self.site: str = config.site_url
-        self.blocked: list = []
-        self.listeners: list = []
-        self.routines: list = []
-        self.channels: dict = {}
-        self.cache: object = None
+        self.config = config
+        self.blocked = []
+        self.listeners = []
+        self.routines = []
+        self.channels = {}
+        self.cache = None
         self.analytics = Analytics(config.api.analytics_key)
 
     async def start(self) -> None:
@@ -151,80 +146,6 @@ class TwitchBot(Bot):
     def add_checks(self) -> None:
         global_checks = [Check.online, Check.enabled, Check.banword]
         [self.check(check) for check in global_checks]
-
-    def load_commands(self, path: str) -> None:
-        for filename in os.listdir(path):
-            if not filename.endswith(".py") or filename.startswith("__"):
-                continue
-            try:
-                local: str = os.path.join(path, filename)
-                name: str = local[:-3].replace("/", ".")
-                package: str = path.replace("/", ".")
-                module: types.ModuleType = import_module(name, package=package)
-                cooldown: dict = getattr(module, "cooldown", {})
-                module.command.__cooldowns__: list = [
-                    Cooldown(
-                        cooldown.get("rate", DEFAULT_COOLDOWN_RATE),
-                        cooldown.get("per", DEFAULT_COOLDOWN_PER),
-                        cooldown.get("bucket", DEFAULT_COOLDOWN_BUCKET),
-                    )
-                ]
-                extra_checks: list = getattr(module, "extra_checks", [])
-                module.command.__checks__ = [eval(check) for check in extra_checks]
-                command: Command = Command(
-                    name=getattr(module, "name", filename[:-3]),
-                    func=module.command,
-                    aliases=getattr(module, "aliases", None),
-                    no_global_checks=getattr(module, "no_global_checks", False),
-                )
-                command.description: str = module.description
-                command.usage: Optional[str] = getattr(module, "usage", None)
-                self.add_command(command)
-            except Exception as e:
-                log.error(f"Command '{filename[:-3]}' failed to load: {e}", extra={"locals": locals()})
-
-    def load_listeners(self, path: str) -> None:
-        for filename in os.listdir(path):
-            if not filename.endswith(".py") or filename.startswith("__"):
-                continue
-            try:
-                local: str = os.path.join(path, filename)
-                name: str = local[:-3].replace("/", ".")
-                package: str = path.replace("/", ".")
-                module: types.ModuleType = import_module(name, package=package)
-                self.listeners.append(module.listener)
-            except Exception as e:
-                log.error(f"Listener '{filename[:-3]}' failed to load: {e}", extra={"locals": locals()})
-
-    def load_routines(self, path: str) -> None:
-        for filename in os.listdir(path):
-            if not filename.endswith(".py") or filename.startswith("__"):
-                continue
-            try:
-                local: str = os.path.join(path, filename)
-                name: str = local[:-3].replace("/", ".")
-                package: str = path.replace("/", ".")
-                module: types.ModuleType = import_module(name, package=package)
-                routine: Routine = Routine(
-                    coro=module.routine,
-                    time=getattr(module, "time", None),
-                    delta=getattr(module, "delta", None),
-                )
-                self.routines.append(routine)
-                log.info(f"Routine '{filename[:-3]}' loaded with time/delta '{routine._time or routine._delta}'")
-            except Exception as e:
-                log.error(f"Routine '{filename[:-3]}' failed to load: {e}", extra={"locals": locals()})
-
-    def load_cogs(self, base: str = "bobotinho/cogs") -> None:
-        self.add_checks()
-        for cog in os.listdir(base):
-            paths: str = os.listdir(os.path.join(base, cog))
-            if "commands" in paths:
-                self.load_commands(os.path.join(base, cog, "commands"))
-            if "listeners" in paths:
-                self.load_listeners(os.path.join(base, cog, "listeners"))
-            if "routines" in paths:
-                self.load_routines(os.path.join(base, cog, "routines"))
 
     def add_channel(self, name, id, banwords=[], disabled=[], online=True) -> None:
         if name in self.channels:
@@ -314,7 +235,6 @@ class TwitchBot(Bot):
         return await self.reply(ctx)
 
     async def event_ready(self) -> None:
-        [routine.start(self) for routine in self.routines]
         log.info(f"{self.nick} | #{len(self.channels)} | {self._prefix}{len(self.commands)}")
 
     async def event_raw_data(self, data) -> None:

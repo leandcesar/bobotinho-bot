@@ -4,4 +4,4 @@ aliases = ["discord", "github", "twitter"]
 
 
 async def command(ctx):
-    ctx.response = f"acesse: {ctx.bot.site}/"
+    ctx.response = f"acesse: {ctx.bot.config.site_url}/"

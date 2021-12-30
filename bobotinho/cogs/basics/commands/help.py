@@ -10,7 +10,7 @@ async def command(ctx, arg: str = ""):
             c = command
             break
     if not c:
-        ctx.response = f"veja todos os comandos: {ctx.bot.site}/docs/help"
+        ctx.response = f"veja todos os comandos: {ctx.bot.config.site_url}/docs/help"
     elif c.aliases:
         aliases = ", ".join([ctx.prefix + alias for alias in c.aliases])
         ctx.response = f"{ctx.prefix}{c.name} ({aliases}): {c.description}"

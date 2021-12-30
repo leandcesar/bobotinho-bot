@@ -22,7 +22,7 @@ class RequestException(BobotinhoException):
 
 
 class BotOffline(CheckFailed):
-    """Bobotinho is offline on channel."""
+    """Bot is offline on channel."""
 
 
 class InappropriateMessage(CheckFailed):

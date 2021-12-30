@@ -7,5 +7,5 @@ async def command(ctx):
     ctx.response = (
         f"estou conectado à {len(ctx.bot.channels)} canais, "
         f"com {len(ctx.bot.commands)} comandos, "
-        f"feito por @{ctx.bot.dev} em Python e hospedado em Heroku"
+        f"feito por @{ctx.bot.config.dev} em Python e hospedado em Heroku"
     )

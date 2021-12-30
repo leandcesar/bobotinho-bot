@@ -3,7 +3,7 @@ import sys
 from redis import Redis
 
 from bobotinho import config, database, log
-from bobotinho.bots import TwitchBot
+from bobotinho.bot import TwitchBot
 from bobotinho.cache import TTLOrderedDict
 
 
