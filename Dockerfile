@@ -1,12 +1,13 @@
 # syntax=docker/dockerfile:1
 
-FROM python:3.8-slim-buster
-ENV PIP_NO_CACHE_DIR=off \
-  PIP_DISABLE_PIP_VERSION_CHECK=on \
-  PIP_DEFAULT_TIMEOUT=100 \
-  TZ=America/Sao_Paulo
-WORKDIR /app
-COPY requirements.txt requirements.txt
-RUN pip3 install -r requirements.txt
+FROM python:3.9-slim-bullseye
+
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+COPY requirements/prod.txt .
+RUN pip install -r requirements/prod.txt
+
 COPY . .
-CMD python3 bot.py
+CMD ["python", "-m", "bobotinho"]
