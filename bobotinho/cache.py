@@ -2,7 +2,7 @@
 import time
 from collections import OrderedDict
 from threading import RLock
-from typing import Any, Optional
+from typing import Any
 
 
 class TTLOrderedDict(OrderedDict):
@@ -12,11 +12,11 @@ class TTLOrderedDict(OrderedDict):
 
     def _expired(self, key: str, now: float) -> bool:
         with self._lock:
-            expire: Optional[float] = super().__getitem__(key)[0]
+            expire = super().__getitem__(key)[0]
             return expire and expire < now
 
     def _purge(self) -> None:
-        now: float = time.time()
+        now = time.time()
         [
             self.__delitem__(key)
             for key in [
@@ -26,7 +26,7 @@ class TTLOrderedDict(OrderedDict):
 
     def __setitem__(self, key: str, value: Any) -> None:
         with self._lock:
-            expire: Optional[float] = None
+            expire = None
             super().__setitem__(key, (expire, value))
 
     def __delitem__(self, key: str) -> None:
@@ -35,7 +35,7 @@ class TTLOrderedDict(OrderedDict):
 
     def __getitem__(self, key: str) -> Any:
         with self._lock:
-            now: float = time.time()
+            now = time.time()
             if self._expired(key, now):
                 self.__delitem__(key)
                 raise KeyError
@@ -51,7 +51,7 @@ class TTLOrderedDict(OrderedDict):
             return False
         with self._lock:
             self._purge()
-            expire: Optional[float] = time.time() + ex if ex else None
+            expire = time.time() + ex if ex else None
             super().__setitem__(key, (expire, value))
             return True
 
