@@ -1,17 +1,11 @@
-# bot
-aiocache==0.11.1
-aiohttp==3.7.4
-bugsnag==4.0.3
-redis==3.5.3
-twitchio==2.0.6
-# apis
-coinapi.rest.v1==1.3
-deep-translator==1.5.4
-pyowm==3.2.0
-# database
-asyncpg==0.22.0
-tortoise-orm==0.17.7
-# utils
+aiocache>=0.11.1
+aiohttp>=3.7.4
+asyncpg>=0.22.0
+bugsnag>=4.0.3
+deep-translator>=1.5.4
 emoji==1.4.2
 python-dateutil==2.8.2
+redis>=3.5.3
+tortoise-orm>=0.17.7
+twitchio>=2.0.6
 Unidecode==1.3.0

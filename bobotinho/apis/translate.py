@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from deep_translator import GoogleTranslator
 
+__all__ = "Translator"
+
 
 class Translator:
     @staticmethod

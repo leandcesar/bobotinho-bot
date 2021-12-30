@@ -10,7 +10,7 @@ async def command(ctx, arg1: str = "", arg2: str = ""):
     name = convert.str2name(arg1, default=ctx.author.name)
     channel = convert.str2name(arg2, default=ctx.channel.name)
     if name and channel:
-        followage = await Twitch.follow_age(channel, name)
+        followage = await Twitch.follow(channel, name)
         name = "você" if name == ctx.author.name else f"@{name}"
         channel = "você" if channel == ctx.author.name else f"@{channel}"
     if name == f"@{ctx.bot.nick}":

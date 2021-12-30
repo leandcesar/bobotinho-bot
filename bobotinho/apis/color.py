@@ -1,17 +1,21 @@
 # -*- coding: utf-8 -*-
-from typing import Optional
+from dataclasses import dataclass
 
-from bobotinho import aiorequests, config
+from bobotinho.apis import aiorequests
+
+__all__ = "Color"
 
 
+@dataclass
 class Color:
-    base_url = config.color_url
+    """Color API."""
+
+    url: str = "https://www.thecolorapi.com"
 
     @classmethod
-    async def name(cls, color: str) -> Optional[str]:
-        url = f"{cls.base_url}/id"
-        params = {"hex": color}
+    async def name(cls, hex_color: str) -> str:
+        """Get color name from HEX color code."""
+        url = f"{cls.url}/id"
+        params = {"hex": hex_color}
         response = await aiorequests.get(url, params=params)
-        color = response.get("name", {})
-        color_name = color.get("value")
-        return color_name
+        return response["name"]["value"]

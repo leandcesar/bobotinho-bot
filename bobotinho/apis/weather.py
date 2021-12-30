@@ -1,31 +1,33 @@
 # -*- coding: utf-8 -*-
-from pyowm import OWM
-from pyowm.utils.config import get_default_config
+from dataclasses import dataclass
 
-from bobotinho import config, log
+from bobotinho.apis import aiorequests
 
-try:
-    config_dict = get_default_config()
-    config_dict["language"] = "pt_br"
-    owm = OWM(config.weather_key, config_dict).weather_manager()
-except Exception as e:
-    log.warning(e)
+__all__ = "Weather"
 
 
+@dataclass
 class Weather:
-    @staticmethod
-    def predict(place: str) -> dict:
-        observation = owm.weather_at_place(place)
-        location = observation.location
-        weather = observation.weather
-        celsius = weather.temperature("celsius")
-        wind = weather.wind()
+    """Weather forecast API."""
+
+    key: str
+    url: str = "https://api.openweathermap.org/data"
+    version: str = "2.5"
+
+    async def predict(self, location: str) -> dict:
+        """Current weather data for location by city name."""
+        url = f"{self.url}/{self.version}/weather"
+        params = {"appid": self.key, "lang": "pt_br", "units": "metric", "q": location}
+        response = await aiorequests.get(url, params=params)
+        observation = response.json()
         return {
-            "city": location.name,
-            "country": location.country,
-            "status": weather.detailed_status,
-            "temperature": celsius["temp"],
-            "feels_like": celsius["feels_like"],
-            "wind": wind["speed"],
-            "humidiy": weather.humidity,
+            "city": observation["name"],
+            "country": observation["sys"]["country"],
+            "humidity": observation["main"]["humidity"],
+            "status": observation["weather"][0]["description"],
+            "temp_now": observation["main"]["temp"],
+            "temp_min": observation["main"]["temp_min"],
+            "temp_max": observation["main"]["temp_max"],
+            "temp_feels_like": observation["main"]["feels_like"],
+            "wind": observation["wind"]["speed"],
         }

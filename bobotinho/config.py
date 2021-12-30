@@ -37,10 +37,10 @@ class LoggerConfig:
 class APIsConfig:
     """APIs configuration variables"""
 
+    analytics_key = os.environ.get("DASHBOT_KEY")
     bugsnag_key = os.environ.get("BUGSNAG_KEY")
     currency_key = os.environ.get("COINAPI_KEY")
-    analytics_key = os.environ.get("DASHBOT_KEY")
-    own_key = os.environ.get("OWM_KEY")
+    weather_key = os.environ.get("OWM_KEY")
 
 
 class Config(BotConfig):

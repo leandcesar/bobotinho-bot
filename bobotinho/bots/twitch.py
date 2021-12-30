@@ -137,7 +137,7 @@ class TwitchBot(Bot):
         self.routines: list = []
         self.channels: dict = {}
         self.cache: object = None
-        self.analytics = Analytics(config.api.analytics_key) if config.api.analytics_key else None
+        self.analytics = Analytics(config.api.analytics_key)
 
     async def start(self) -> None:
         await self.connect()

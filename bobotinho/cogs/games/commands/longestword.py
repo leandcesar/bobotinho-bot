@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from asyncio.exceptions import TimeoutError
+import asyncio
 
-from bobotinho.apis import Dicio
+from bobotinho.apis import Dictionary
 from bobotinho.utils import convert
 
 aliases = ["lw"]
@@ -23,7 +23,8 @@ async def command(ctx):
         if pattern not in word or word in words:
             return False
         words.append(word)
-        if not Dicio.exists(word):
+        search = asyncio.run(Dictionary.search(word))
+        if not convert.str2ascii(search) == convert.str2ascii(word):
             return False
         if not users.values() or len(word) > len(list(users.values())[0]):
             users[message.author.name] = word
@@ -47,7 +48,7 @@ async def command(ctx):
         ctx.bot.cache.set(f"game-{ctx.channel.name}", ctx.author.name, ex=30)
         waits = ctx.bot._waiting.copy()
         await ctx.bot.wait_for("message", check, timeout=30)
-    except TimeoutError:
+    except asyncio.exceptions.TimeoutError:
         if users:
             users = list(users.items())
             await ctx.send(f'fim de jogo! @{users[0][0]} venceu com a palavra "{users[0][1]}" 🏆')

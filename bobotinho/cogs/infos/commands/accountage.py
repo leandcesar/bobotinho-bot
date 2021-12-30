@@ -12,7 +12,7 @@ async def command(ctx, arg: str = ""):
     if name == ctx.bot.nick:
         ctx.response = "eu sempre existi..."
     else:
-        accountage = await Twitch.account_age(name)
+        accountage = await Twitch.age(name)
         mention = "você" if name == ctx.author.name else f"@{name}"
         if not accountage:
             ctx.response = "não foi possível verificar isso"

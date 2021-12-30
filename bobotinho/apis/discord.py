@@ -3,6 +3,8 @@ from dataclasses import dataclass
 
 from bobotinho.apis import aiorequests
 
+__all__ = "Discord"
+
 
 @dataclass
 class Discord:
