@@ -1,2 +1,1 @@
-web: python app.py
-worker: python bot.py
+worker: python -m bobotinho
