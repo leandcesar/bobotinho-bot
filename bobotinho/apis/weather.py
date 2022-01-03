@@ -8,14 +8,11 @@ __all__ = "Weather"
 
 @dataclass
 class Weather:
-    """Weather forecast API."""
-
     key: str
     url: str = "https://api.openweathermap.org/data"
     version: str = "2.5"
 
     async def predict(self, location: str) -> dict:
-        """Current weather data for location by city name."""
         url = f"{self.url}/{self.version}/weather"
         params = {"appid": self.key, "lang": "pt_br", "units": "metric", "q": location}
         response = await aiorequests.get(url, params=params)

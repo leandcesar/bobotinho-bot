@@ -2,21 +2,18 @@
 from dataclasses import dataclass
 
 from bobotinho.apis import aiorequests
+from bobotinho.exceptions import InvalidUsername, HTTPException
 
 __all__ = "Twitch"
-
-ERRORS = ("error", "not follow", "be specified", "no user", "not found", "cannot follow", "not have")
 
 
 @dataclass
 class Twitch:
-    """Twitch user and channel informations API."""
-
     url: str = "http://decapi.me/twitch"
 
     @classmethod
-    async def _request(cls, path: str) -> str:
-        url = f"{cls.url}/{path}"
+    async def _request(cls, path: str, channel: str, user: str = "") -> str:
+        url = f"{cls.url}/{path}/{channel}/{user}"
         params = {
             "lang": "pt",
             "precision": "3",
@@ -27,81 +24,83 @@ class Twitch:
             "limit": "2",
         }
         response = await aiorequests.get(url, params=params, res_method="text")
-        if response.startswith("No user with the name"):
-            user = response.split('"')[1]
-            return f"@{user} não existe"
-        if any(error in response.lower() for error in ERRORS):
-            return ""
+        if response in (
+            f"User not found: {channel}",
+            f"User not found: {user}",
+            "A username has to be specified.",
+            "A channel name has to be specified.",
+            "Both username and channel name must be specified.",
+            f"No user with the name \"{channel}\" found.",
+            f"No user with the name \"{user}\" found.",
+            f"There was an error retrieving users for channel: {channel}",
+        ):
+            raise InvalidUsername
+        elif response in (
+            f"{user} does not follow {channel}",
+            "A user cannot follow themself.",
+            "You do not have any followers :(",
+            "The list of users is empty.",
+            "End of following list.",
+        ):
+            return None
+        elif response.startswith("[Error from Twitch API]"):
+            raise HTTPException
         if path.startswith(("following", "followers", "random_user")):
             return response.split(", ")[0]
         return response
 
     @classmethod
-    async def age(cls, user: str) -> str:
-        """Account age of the specified user."""
-        return await cls._request(f"accountage/{user}")
+    async def age(cls, user: str = "cellbit") -> str:
+        return await cls._request("accountage", channel=user)
 
     @classmethod
-    async def avatar(cls, user: str) -> str:
-        """Avatar URL for the specified user."""
-        return await cls._request(f"avatar/{user}")
+    async def avatar(cls, user: str = "cellbit") -> str:
+        return await cls._request("avatar", channel=user)
 
     @classmethod
-    async def creation(cls, user: str) -> str:
-        """Creation datetime of the specified user."""
-        return await cls._request(f"creation/{user}")
+    async def creation(cls, user: str = "cellbit") -> str:
+        return await cls._request("creation", channel=user)
 
     @classmethod
-    async def follow_age(cls, channel: str, user: str) -> str:
-        """Time difference between when user followed channel."""
-        return await cls._request(f"followage/{channel}/{user}")
+    async def follow_age(cls, channel: str, user: str = "cellbit") -> str:
+        return await cls._request("followage", channel=channel, user=user)
 
     @classmethod
     async def follows(cls, channel: str) -> str:
-        """Current amount of followers a Twitch channel has."""
-        return await cls._request(f"followcount/{channel}")
+        return await cls._request("followcount", channel=channel)
 
     @classmethod
-    async def followed(cls, channel: str, user: str) -> str:
-        """Datetime of when the user followed the channel."""
-        return await cls._request(f"followed/{channel}/{user}")
+    async def followed(cls, channel: str, user: str = "cellbit") -> str:
+        return await cls._request("followed", channel=channel, user=user)
 
     @classmethod
     async def follower(cls, channel: str) -> str:
-        """Followers a channel has."""
-        return await cls._request(f"followers/{channel}")
+        return await cls._request("followers", channel=channel)
 
     @classmethod
-    async def following(cls, user: str) -> str:
-        """Channels that the specified user is following."""
-        return await cls._request(f"following/{user}")
+    async def following(cls, user: str = "cellbit") -> str:
+        return await cls._request("following", channel=user)
 
     @classmethod
     async def game(cls, channel: str) -> str:
-        """Current game the channel has been set to."""
-        return await cls._request(f"game/{channel}")
+        return await cls._request("game", channel=channel)
 
     @classmethod
     async def random_user(cls, channel: str) -> str:
-        """Random user that are currently logged into chat in the specified channel."""
-        return await cls._request(f"random_user/{channel}")
+        return await cls._request("random_user", channel=channel)
 
     @classmethod
     async def title(cls, channel: str) -> str:
-        """Current title set on the channel."""
-        return await cls._request(f"title/{channel}")
+        return await cls._request("title", channel=channel)
 
     @classmethod
     async def views(cls, channel: str) -> str:
-        """Total views a channel has."""
-        return await cls._request(f"total_views/{channel}")
+        return await cls._request("total_views", channel=channel)
 
     @classmethod
     async def uptime(cls, channel: str) -> str:
-        """How long the specified channel has been live for the current stream."""
-        return await cls._request(f"uptime/{channel}")
+        return await cls._request("uptime", channel=channel)
 
     @classmethod
     async def viewers(cls, channel: str) -> str:
-        """Total viewers the channel has, if they are currently streaming."""
-        return await cls._request(f"viewercount/{channel}")
+        return await cls._request("viewercount", channel=channel)

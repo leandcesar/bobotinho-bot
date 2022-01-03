@@ -9,13 +9,10 @@ __all__ = "Dictionary"
 
 @dataclass
 class Dictionary:
-    """Portuguese (Brazilian) dictionary API."""
-
     url: str = "http://www.dicio.com.br"
 
     @classmethod
     async def search(cls, word: str) -> str:
-        """Search for a word to check if it exists."""
         url = f"{cls.url}/{word}"
         response = await aiorequests.get(url, res_method="text")
         try:

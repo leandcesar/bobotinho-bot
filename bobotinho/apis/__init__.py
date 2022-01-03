@@ -8,3 +8,4 @@ from .math import Math  # NOQA
 from .translate import Translator  # NOQA
 from .twitch import Twitch  # NOQA
 from .weather import Weather  # NOQA
+from .wit import Wit  # NOQA

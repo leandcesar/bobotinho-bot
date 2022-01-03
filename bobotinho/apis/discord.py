@@ -8,11 +8,9 @@ __all__ = "Discord"
 
 @dataclass
 class Discord:
-    """Discord API."""
 
     @staticmethod
     async def webhook(url: str, data: dict) -> None:
-        """Send a embed message to the webhook URL provided."""
         data = {
             "embeds": [
                 {
