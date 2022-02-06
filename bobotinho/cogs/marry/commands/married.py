@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from bobotinho.database.models import User, Wedding
+from bobotinho.models import User, Wedding
 from bobotinho.utils import convert, timetools
 
 description = "Saiba quando algum usuário se casou"

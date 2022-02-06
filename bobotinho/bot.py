@@ -1,275 +1,262 @@
 # -*- coding: utf-8 -*-
-import inspect
-from typing import Optional
+import json
+import os
+from typing import Callable
 
-from twitchio.ext.commands import (
-    Bot,
-    Bucket,
-    Command,
-    Context,
-    Cooldown,
-)
-from twitchio.ext.commands.errors import (
-    CheckFailed,
-    CommandNotFound,
-    CommandOnCooldown,
-    MissingRequiredArgument,
-)
+from redis import Redis
+from tortoise import Tortoise
+from twitchio.ext import commands
+from twitchio.ext import routines
 from twitchio.message import Message
 
+from bobotinho import exceptions
 from bobotinho import log
 from bobotinho.apis import Analytics
-from bobotinho.database.models import Channel, User
-from bobotinho.exceptions import (
-    BotOffline,
-    CommandDisabled,
-    InappropriateMessage,
-    AlreadyPlaying,
-    InvalidUser,
-    UserNotAllowed,
-)
-from bobotinho.utils import convert
-
-DEFAULT_COOLDOWN_RATE = 2
-DEFAULT_COOLDOWN_PER = 5
-DEFAULT_COOLDOWN_BUCKET = Bucket.user
+from bobotinho.cache import TTLOrderedDict
+from bobotinho.config import Config
+from bobotinho.models import Channel, User
 
 
-class Ctx(Context):
-    def __init__(self, message: Message, bot: Bot, **kwargs) -> None:
-        super().__init__(message, bot, **kwargs)
-        self.response: Optional[str] = None
-        self.user: User = None
+def command(aliases: list = None, usage: str = None) -> Callable[[Callable], commands.Command]:
+
+    def decorator(func: Callable) -> commands.Command:
+        command = commands.Command(name=func.__name__, func=func, aliases=aliases)
+        command.usage = usage
+        return command
+
+    return decorator
+
+
+class Context(commands.Context):
+    def __init__(self, message: Message, bot: commands.Bot, **attrs) -> None:
+        super().__init__(message, bot, **attrs)
+        self.response = ""
 
     def __iter__(self):
         yield "author", getattr(self.author, "name", None)
         yield "channel", getattr(self.channel, "name", None)
-        yield "user", getattr(self.user, "id", None)
         yield "message", getattr(self.message, "content", None)
-        yield "response", self.response
+
+    @property
+    def alias(self) -> str:
+        return self.message.content.split()[0].lstrip(self.bot.prefix).lower()
 
 
-class Role:
-    @staticmethod
-    def dev(ctx: Ctx) -> bool:
-        return ctx.author.name == ctx.bot.config.dev
-
-    @staticmethod
-    def owner(ctx: Ctx) -> bool:
-        return ctx.author.name == ctx.channel.name
-
-    @staticmethod
-    def admin(ctx: Ctx) -> bool:
-        return ctx.author.is_mod or Role.owner(ctx) or Role.dev(ctx)
-
-    @staticmethod
-    def vip(ctx: Ctx) -> bool:
-        return ctx.author.badges and bool(ctx.author.badges.get("vip"))
-
-    @staticmethod
-    def sub(ctx: Ctx) -> bool:
-        return ctx.author.is_subscriber
-
-    @staticmethod
-    def sponsor(ctx) -> bool:
-        return ctx.user and ctx.user.sponsor
-
-    @staticmethod
-    def any(ctx: Ctx) -> bool:
-        return (
-            Role.sub(ctx)
-            or Role.vip(ctx)
-            or Role.admin(ctx)
-            or Role.owner(ctx)
-            or Role.dev(ctx)
-            or Role.sponsor(ctx)
-        )
-
-
-class Check:
-    @staticmethod
-    def allowed(ctx: Ctx) -> bool:
-        if not Role.any(ctx) and convert.str2url(ctx.message.content) is not None:
-            raise UserNotAllowed
-        return True
-
-    @staticmethod
-    def banword(ctx: Ctx) -> bool:
-        if any(word in ctx.message.content for word in ctx.bot.channels[ctx.channel.name]["banwords"]):
-            raise InappropriateMessage
-        return True
-
-    @staticmethod
-    def enabled(ctx: Ctx) -> bool:
-        if ctx.command.name in ctx.bot.channels[ctx.channel.name]["disabled"]:
-            raise CommandDisabled
-        return True
-
-    @staticmethod
-    def game(ctx: Ctx) -> bool:
-        if ctx.bot.cache.get(f"game-{ctx.channel.name}"):
-            raise AlreadyPlaying
-        return True
-
-    @staticmethod
-    def online(ctx: Ctx) -> bool:
-        if not ctx.bot.channels[ctx.channel.name]["online"]:
-            raise BotOffline
-        return True
-
-
-class TwitchBot(Bot):
-    def __init__(self, config):
+class Bot(commands.Bot):
+    def __init__(self, config: Config):
         super().__init__(
-            token=config.access_token,
-            client_secret=config.client_secret,
+            token=config.token,
+            client_secret=config.secret,
             prefix=config.prefix,
             case_insensitive=True,
         )
         self.config = config
-        self.blocked = []
-        self.listeners = []
-        self.routines = []
+        self.ignore = []
         self.channels = {}
         self.cache = None
-        self.analytics = Analytics(config.api.analytics_key)
+        self.analytics = None
 
-    async def start(self) -> None:
-        await self.connect()
-        await self.add_all_channels()
-        await self.fetch_blocked()
+    @property
+    def prefix(self) -> str:
+        return self._prefix
 
-    async def stop(self) -> None:
-        [routine.stop() for routine in self.routines]
-        await self.close()
+    @routines.routine(seconds=15)
+    async def check_channels(self) -> None:
+        connected = [channel.name for channel in self.connected_channels]
+        disconnected = [channel for channel in self.channels.keys() if channel not in connected]
+        try:
+            await self.join_channels(disconnected)
+        except Exception as e:
+            log.exception(e)
 
-    def add_checks(self) -> None:
-        global_checks = [Check.online, Check.enabled, Check.banword]
-        [self.check(check) for check in global_checks]
+    @routines.routine(seconds=15)
+    async def new_channels(self) -> None:
+        new_channels = self.cache.getset("new-channels", "") or ""
+        for new_channel in new_channels.split("\n"):
+            if not new_channel:
+                continue
+            try:
+                new_channel = json.loads(new_channel)
+                user, _ = await User.update_or_create(
+                    id=int(new_channel["id"]),
+                    defaults={"name": new_channel["name"]},
+                )
+                channel, _ = await Channel.update_or_create(
+                    user_id=user.id,
+                    defaults={"followers": new_channel["followers"]},
+                )
+                if channel.user.block:
+                    continue
+                self.channels[channel.user.name] = {
+                    "id": channel.user_id,
+                    "banwords": list(channel.banwords.keys()),
+                    "disabled": list(channel.disabled.keys()),
+                    "online": channel.online,
+                }
+            except Exception as e:
+                log.exception(e)
 
-    def add_channel(self, name, id, banwords=[], disabled=[], online=True) -> None:
-        if name in self.channels:
-            log.warning(f"'{name}' already added")
+    def init_analytics(self) -> None:
+        if self.config.api.analytics_key:
+            self.analytics = Analytics(key=self.config.api.analytics_key)
         else:
-            self.channels[name] = {
-                "id": id, "banwords": banwords, "disabled": disabled, "online": online
-            }
+            log.warning("No Dashbot API key configured, couldn't track")
 
-    async def add_all_channels(self) -> None:
-        channels = await Channel.all().select_related("user")
-        if not channels:
-            self.add_channel(self.dev.lower(), 0)
-        for channel in channels:
+    def init_cache(self) -> None:
+        if self.config.redis_url:
+            self.cache = Redis.from_url(self.config.redis_url, encoding="utf-8", decode_responses=True)
+        else:
+            log.warning("No Redis URL configured, using cache in local memory")
+            self.cache = TTLOrderedDict()
+
+    def close_cache(self) -> None:
+        if self.cache is not None:
+            self.cache.close()
+
+    async def init_db(self) -> None:
+        if self.config.database.url:
+            db_url = self.config.database.url
+        else:
+            log.warning("No Database URL configured, using in-memory SQLite")
+            db_url = "sqlite://:memory:"
+        await Tortoise.init(db_url=db_url, modules={"models": ["bobotinho.models"]})
+        await Tortoise.generate_schemas(safe=True)
+
+    async def close_db(self) -> None:
+        await Tortoise.close_connections()
+
+    async def fetch_channels(self) -> None:
+        await User.create(id=453651679, name="discretinho")  # NOTE: delete
+        await Channel.create(user_id=453651679)  # NOTE: delete
+        for channel in await Channel.all().select_related("user"):
             if channel.user.block:
                 continue
-            self.add_channel(
-                channel.user.name,
-                channel.user_id,
-                list(channel.banwords.keys()),
-                list(channel.disabled.keys()),
-                channel.online,
-            )
+            self.channels[channel.user.name] = {
+                "id": channel.user_id,
+                "banwords": list(channel.banwords.keys()),
+                "disabled": list(channel.disabled.keys()),
+                "online": channel.online,
+            }
 
-    async def fetch_blocked(self) -> None:
-        self.blocked = await User.filter(block=True).all().values_list("id", flat=True)
+    async def fetch_users_block(self) -> None:
+        self.ignore = await User.filter(block=True).all().values_list("id", flat=True)
 
-    async def reply(self, ctx: Ctx) -> bool:
-        if not ctx.response:
-            return False
-        try:
-            ctx.response = f"{ctx.user or ctx.author.name}, {ctx.response}"
-            await ctx.send(ctx.response)
-        except Exception as e:
-            log.error(e, extra={"ctx": dict(ctx)})
-        else:
-            log.info(f"#{ctx.channel.name} @{self.nick}: {ctx.response}")
-            await self.analytics.sent(
+    def add_global_checks(self) -> None:
+
+        def is_online(ctx: Context) -> bool:
+            if not self.channels[ctx.channel.name]["online"] and ctx.command.name != "start":
+                raise exceptions.BotOffline
+            return True
+
+        def is_enable(ctx: Context) -> bool:
+            if ctx.command.name in self.channels[ctx.channel.name]["disabled"]:
+                raise exceptions.CommandDisabled
+            return True
+
+        self.check(is_online)
+        self.check(is_enable)
+
+    def load_modules(self) -> None:
+        for filename in os.listdir(self.config.cogs_path):
+            if filename.startswith("_") or not filename.endswith(".py"):
+                continue
+            try:
+                cog = os.path.join(self.config.cogs_path, filename[:-3]).replace("/", ".")
+                self.load_module(cog)
+            except Exception as e:
+                log.exception(e)
+
+    async def start(self) -> None:
+        self.init_analytics()
+        self.init_cache()
+        await self.init_db()
+        await self.fetch_channels()
+        await self.fetch_users_block()
+        await self.connect()
+        self.add_global_checks()
+        self.load_modules()
+        self.new_channels.start()
+        self.check_channels.start()
+
+    async def stop(self) -> None:
+        self.new_channels.cancel()
+        self.check_channels.cancel()
+        self.close_cache()
+        await self.close_db()
+        await self.close()
+
+    async def global_before_invoke(self, ctx: Context) -> None:
+        log.info(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.message.content}")
+        if self.analytics:
+            await self.analytics.received(
                 author_id=ctx.author.id,
                 author_name=ctx.author.name,
                 channel_name=ctx.channel.name,
-                message=ctx.response,
+                message=ctx.message.content,
             )
-            return True
-        return False
-
-    async def handle_commands(self, ctx: Ctx) -> bool:
-        if ctx.response:
-            return False
-        if not ctx.prefix:
-            return False
-        if not ctx.is_valid:
-            return False
-        log.info(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.message.content}")
-        self.analytics.received(
-            author_id=ctx.author.id,
-            author_name=ctx.author.name,
-            channel_name=ctx.channel.name,
-            message=ctx.message.content,
-        )
-        if not ctx.user:
-            ctx.user, _ = await User.get_or_create(
+        if not await User.exists(id=ctx.author.id):
+            await User.create(
                 id=ctx.author.id,
-                defaults={
-                    "channel": ctx.channel.name,
-                    "name": ctx.author.name,
-                    "color": ctx.author.colour,
-                    "content": ctx.message.content.replace("ACTION", "", 1),
-                },
+                channel=ctx.channel.name,
+                name=ctx.author.name,
+                color=ctx.author.colour,
+                content=ctx.message.content.replace("ACTION", "", 1),
             )
-        try:
-            await self.invoke(ctx)
-        except MissingRequiredArgument:
-            ctx.response = ctx.command.usage
-        except Exception as e:
-            log.error(e, extra={"ctx": dict(ctx)})
-        return await self.reply(ctx)
 
-    async def handle_listeners(self, ctx: Ctx) -> bool:
-        for listener in self.listeners:
-            if ctx.response:
-                break
-            if inspect.iscoroutinefunction(listener):
-                await listener(ctx)
-            else:
-                listener(ctx)
-        return await self.reply(ctx)
+    async def global_after_invoke(self, ctx: Context) -> None:
+        if not ctx.response:
+            return None
+        try:
+            await ctx.reply(f"@{ctx.author.name}, {ctx.response}")
+        except Exception as e:
+            log.exception(e, extra={"ctx": dict(ctx)})
+        else:
+            log.info(f"#{ctx.channel.name} @{self.nick}: {ctx.author.name}, {ctx.response}")
+            if self.analytics:
+                await self.analytics.sent(
+                    author_id=ctx.author.id,
+                    author_name=ctx.author.name,
+                    channel_name=ctx.channel.name,
+                    message=ctx.response,
+                )
 
     async def event_ready(self) -> None:
-        log.info(f"{self.nick} | #{len(self.channels)} | {self._prefix}{len(self.commands)}")
+        log.info(f"Prefix '{self.prefix}', {len(self.channels)} channels and {len(self.commands)} commands")
 
-    async def event_raw_data(self, data) -> None:
-        bot_part_prefix = f":{self.nick}!{self.nick}@{self.nick}.tmi.twitch.tv PART"
-        if data.startswith(f"{bot_part_prefix} #"):
-            i = len(f"{bot_part_prefix} #")
-            channel = data[i:].strip("\r\n")
-            self._connection._cache.pop(channel)
-
-    async def event_command_error(self, ctx: Ctx, e: Exception) -> None:
-        if isinstance(e, CommandDisabled):
+    async def event_command_error(self, ctx: Context, e: Exception) -> None:
+        if isinstance(e, exceptions.BotOffline):
+            log.warning(e)
+        elif isinstance(e, exceptions.CommandDisabled):
             ctx.response = "esse comando está desativado nesse canal"
-        elif isinstance(e, InappropriateMessage):
+        elif isinstance(e, exceptions.MissingRequiredArgument):
+            ctx.response = ctx.command.usage
+        elif isinstance(e, exceptions.InappropriateMessage):
             ctx.response = "sua mensagem contém um termo banido"
-        elif isinstance(e, UserNotAllowed):
-            ctx.response = "apenas inscritos, VIPs e MODs podem enviar links"
-        elif isinstance(e, InvalidUser):
+        elif isinstance(e, exceptions.InvalidUsername):
             ctx.response = "nome de usuário inválido"
-        elif isinstance(e, AlreadyPlaying):
+        elif isinstance(e, exceptions.AlreadyPlaying):
             ctx.response = "um jogo já está em andamento nesse canal"
-        elif isinstance(e, (BotOffline, CommandOnCooldown, CommandNotFound, CheckFailed)):
-            log.info(e)
+        elif isinstance(e, exceptions.ModRequired):
+            log.warning(e)
+        elif isinstance(e, exceptions.PremiumRequired):
+            log.warning(e)
+        elif isinstance(e, exceptions.CommandOnCooldown):
+            log.warning(e)
+        elif isinstance(e, exceptions.CommandNotFound):
+            pass
         else:
             ctx.response = "ocorreu um erro inesperado"
             log.error(e, extra={"ctx": dict(ctx)}, exc_info=e)
-        await self.reply(ctx)
 
     async def event_message(self, message: Message) -> None:
         if message.echo:
-            return
-        if message.author.id in self.blocked:
-            return
-        if not self.channels[message.channel.name]["online"] and message.content != f"{self._prefix}start":
-            return
-        ctx: Ctx = await self.get_context(message, cls=Ctx)
-        ctx.user = await User.update_or_none(ctx)
-        await self.handle_listeners(ctx)
-        await self.handle_commands(ctx)
+            return None
+        try:
+            ctx = await self.get_context(message, cls=Context)
+            await self.invoke(ctx)
+        except exceptions.MissingRequiredArgument:
+            await self.global_before_invoke(ctx)
+            ctx.response = ctx.command.usage
+            await self.global_after_invoke(ctx)
+        except Exception as e:
+            log.exception(e, extra={"ctx": dict(ctx)})

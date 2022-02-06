@@ -3,10 +3,9 @@ import os
 
 
 class BotConfig:
-    """Bot configuration variables"""
-
+    cogs_path = os.environ.get("COGS_PATH", "bobotinho/cogs")
     color = os.environ.get("COLOR", 0x9147FF)
-    dev = os.environ.get("DEV")
+    dev = os.environ.get("DEV_NICK")
     prefix = os.environ.get("PREFIX", "%")
     token = os.environ.get("ACCESS_TOKEN")
     secret = os.environ.get("CLIENT_SECRET")
@@ -17,35 +16,24 @@ class BotConfig:
 
 
 class DatabaseConfig:
-    """Database configuration variables"""
-
-    user = os.environ.get("DB_USER")
-    password = os.environ.get("DB_PASSWORD")
-    host = os.environ.get("DB_HOST")
-    name = os.environ.get("DB_NAME")
-    url = os.environ.get("DB_URL", "sqlite://:memory:")
+    url = os.environ.get("DATABASE_URL")
 
 
 class LoggerConfig:
-    """Logging configuration variables"""
-
     level = os.environ.get("LOG_LEVEL", "INFO")
     format = os.environ.get("LOG_FORMAT")
-    filename = os.environ.get("LOG_FILE_CONFIG")
+    filename = os.environ.get("LOG_FILE_CONFIG", "logging_config.ini")
 
 
 class APIsConfig:
-    """APIs configuration variables"""
-
     analytics_key = os.environ.get("DASHBOT_KEY")
     bugsnag_key = os.environ.get("BUGSNAG_KEY")
     currency_key = os.environ.get("COINAPI_KEY")
     weather_key = os.environ.get("OWM_KEY")
+    wit_token = os.environ.get("WIT_TOKEN")
 
 
 class Config(BotConfig):
-    """All configuration variables"""
-
     stage = os.environ.get("STAGE", "local")
     version = os.environ.get("VERSION")
     database = DatabaseConfig

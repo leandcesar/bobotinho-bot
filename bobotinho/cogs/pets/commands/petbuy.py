@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from bobotinho.cogs.pets import random_pets
-from bobotinho.database.models import Cookie, Pet
+from bobotinho.models import Cookie, Pet
 
 description = "Adquira um dos pets disponíveis na loja"
 usage = "digite o comando e um dos pets disponíveis na loja para adquirí-lo"

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from bobotinho.database.models import Cookie, Wedding
+from bobotinho.models import Cookie, Wedding
 
 description = "Aceite o pedido de casamento"
 

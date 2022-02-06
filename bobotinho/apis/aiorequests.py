@@ -4,8 +4,6 @@ from typing import Union
 
 import aiohttp
 
-__all__ = ("request", "no_wait_request", "get", "post")
-
 
 async def request(
     url: str,
@@ -17,7 +15,8 @@ async def request(
 ) -> Union[str, dict]:
     async with aiohttp.ClientSession(raise_for_status=raise_for_status) as session:
         async with session.request(method, url, *args, **kwargs) as response:
-            return await getattr(response, res_method)()
+            response = await getattr(response, res_method)()
+    return response
 
 
 def no_wait_request(

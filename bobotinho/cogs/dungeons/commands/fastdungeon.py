@@ -3,7 +3,7 @@ from bobotinho.cogs.dungeons import (
     options_sub_class,
     resume_dungeon,
 )
-from bobotinho.database.models import Player
+from bobotinho.models import Player
 from bobotinho.utils import timetools
 
 description = "Entre na dungeon e adquira experiência sem precisar tomar uma escolha"
@@ -21,7 +21,7 @@ async def command(ctx):
             ctx.response = f"aguarde {cooldown} para entrar em outra dungeon ⌛"
         else:
             multiplier = 2 if ctx.user.sponsor else 1
-            player, response = resume_dungeon(player, multiplier=multiplier)
+            player, ctx.response = resume_dungeon(player, multiplier=multiplier)
             player.last_at = ctx.message.timestamp
             await player.save()
             ctx.response = response

@@ -3,7 +3,18 @@ from dataclasses import dataclass
 
 from bobotinho.apis import aiorequests
 
-__all__ = "Weather"
+
+@dataclass
+class Prediction:
+    city: str
+    country: str
+    humidity: str
+    status: str
+    feels_like: str
+    temp_max: str
+    temp_min: str
+    temp_now: str
+    wind: str
 
 
 @dataclass
@@ -12,19 +23,18 @@ class Weather:
     url: str = "https://api.openweathermap.org/data"
     version: str = "2.5"
 
-    async def predict(self, location: str) -> dict:
+    async def predict(self, location: str) -> Prediction:
         url = f"{self.url}/{self.version}/weather"
         params = {"appid": self.key, "lang": "pt_br", "units": "metric", "q": location}
-        response = await aiorequests.get(url, params=params)
-        observation = response.json()
-        return {
-            "city": observation["name"],
-            "country": observation["sys"]["country"],
-            "humidity": observation["main"]["humidity"],
-            "status": observation["weather"][0]["description"],
-            "temp_now": observation["main"]["temp"],
-            "temp_min": observation["main"]["temp_min"],
-            "temp_max": observation["main"]["temp_max"],
-            "temp_feels_like": observation["main"]["feels_like"],
-            "wind": observation["wind"]["speed"],
-        }
+        observation = await aiorequests.get(url, params=params)
+        return Prediction(
+            city=observation["name"],
+            country=observation["sys"]["country"],
+            humidity=observation["main"]["humidity"],
+            status=observation["weather"][0]["description"],
+            feels_like=observation["main"]["feels_like"],
+            temp_max=observation["main"]["temp_max"],
+            temp_min=observation["main"]["temp_min"],
+            temp_now=observation["main"]["temp"],
+            wind=observation["wind"]["speed"],
+        )

@@ -7,7 +7,7 @@ from bobotinho.cogs.dungeons import (
     options_sub_class,
     resume_dungeon,
 )
-from bobotinho.database.models import Player
+from bobotinho.models import Player
 from bobotinho.utils import timetools
 
 description = "Entre na dungeon, faça sua escolha e adquira experiência"
@@ -31,7 +31,7 @@ async def command(ctx, *, content: str = ""):
         elif player.dungeon:
             if choice and choice.split()[0] in ["1", "2"]:
                 multiplier = 2 if ctx.user.sponsor else 1
-                player, response = resume_dungeon(player, choice.split()[0], multiplier=multiplier)
+                player, ctx.response = resume_dungeon(player, choice.split()[0], multiplier=multiplier)
                 await player.save()
                 ctx.response = response
             else:

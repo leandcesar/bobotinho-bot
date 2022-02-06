@@ -17,12 +17,9 @@ class TTLOrderedDict(OrderedDict):
 
     def _purge(self) -> None:
         now = time.time()
-        [
-            self.__delitem__(key)
-            for key in [
-                key for key in list(super().__iter__()) if self._expired(key, now)
-            ]
-        ]
+        for key in list(super().__iter__()):
+            if self._expired(key, now):
+                self.__delitem__(key)
 
     def __setitem__(self, key: str, value: Any) -> None:
         with self._lock:

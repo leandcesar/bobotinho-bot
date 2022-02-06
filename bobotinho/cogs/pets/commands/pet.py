@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from bobotinho.cogs.pets import join_pets
 from bobotinho.cogs.pets.commands import petbuy, petlist, petname, petpat, petsell
-from bobotinho.database.models import Pet, User
+from bobotinho.models import Pet, User
 from bobotinho.utils import convert
 
 description = "Veja os pets de um usuário"

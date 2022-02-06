@@ -3,8 +3,6 @@ from dataclasses import dataclass
 
 from bobotinho.apis import aiorequests
 
-__all__ = "Currency"
-
 
 @dataclass
 class Currency:

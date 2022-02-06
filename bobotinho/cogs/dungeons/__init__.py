@@ -151,10 +151,10 @@ def resume_dungeon(player: object, choice: str = None, multiplier: int = 1) -> (
         choice = random.choice(["1", "2"])
         quote, options = d["quote"].split('"%ed 1"')
         option = options.split('ou "%ed 2"')[int(choice) - 1].replace("para", "Você decide", 1).rstrip()
-        response = quote + option + ". "
+        ctx.response = quote + option + ". "
         response += d[choice][result]
     else:
-        response = d[choice][result]
+        ctx.response = d[choice][result]
     if result == "win":
         player.wins += 1
         gained = (random.randint(50, 75) + 3 * player.level) * multiplier

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from bobotinho.cogs.pets import all_pets
-from bobotinho.database.models import Cookie, Pet
+from bobotinho.models import Cookie, Pet
 
 description = "Devolva um pet em troca de parte da quantia que gastou"
 usage = "digite o comando e o nome ou espécie do pet que quer devolver"

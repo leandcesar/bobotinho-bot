@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from bobotinho.cogs.pets import all_pets
-from bobotinho.database.models import Pet
+from bobotinho.models import Pet
 
 description = "Dê um nome para o seu pet"
 usage = "digite o comando e o nome que desejar para seu pet"

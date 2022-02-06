@@ -2,21 +2,26 @@
 from dataclasses import dataclass
 
 from bobotinho.apis import aiorequests
-from bobotinho.exceptions import InvalidUsername, HTTPException
-
-__all__ = "Twitch"
+from bobotinho.exceptions import InvalidUsername
 
 
 @dataclass
 class Twitch:
     url: str = "http://decapi.me/twitch"
+    errors: tuple = (
+        "User not found",
+        "be specified",
+        "No user with the name",
+        "There was an error",
+        "Error from Twitch API",
+    )
 
     @classmethod
-    async def _request(cls, path: str, channel: str, user: str = "") -> str:
+    async def _request(cls, path: str, channel: str, user: str = "", *, precision: str = "3") -> str:
         url = f"{cls.url}/{path}/{channel}/{user}"
         params = {
             "lang": "pt",
-            "precision": "3",
+            "precision": precision,
             "format": "d/m/Y \\à\\s H:i:s",
             "tz": "America/Sao_Paulo",
             "direction": "asc",
@@ -24,16 +29,7 @@ class Twitch:
             "limit": "2",
         }
         response = await aiorequests.get(url, params=params, res_method="text")
-        if response in (
-            f"User not found: {channel}",
-            f"User not found: {user}",
-            "A username has to be specified.",
-            "A channel name has to be specified.",
-            "Both username and channel name must be specified.",
-            f"No user with the name \"{channel}\" found.",
-            f"No user with the name \"{user}\" found.",
-            f"There was an error retrieving users for channel: {channel}",
-        ):
+        if any([error in response for error in cls.errors]):
             raise InvalidUsername
         elif response in (
             f"{user} does not follow {channel}",
@@ -43,8 +39,6 @@ class Twitch:
             "End of following list.",
         ):
             return None
-        elif response.startswith("[Error from Twitch API]"):
-            raise HTTPException
         if path.startswith(("following", "followers", "random_user")):
             return response.split(", ")[0]
         return response
@@ -99,7 +93,7 @@ class Twitch:
 
     @classmethod
     async def uptime(cls, channel: str) -> str:
-        return await cls._request("uptime", channel=channel)
+        return await cls._request("uptime", channel=channel, precision=1)
 
     @classmethod
     async def viewers(cls, channel: str) -> str:

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from bobotinho.database.models import Player
+from bobotinho.models import Player
 
 description = "Saiba quais são os melhores jogadores da dungeon"
 

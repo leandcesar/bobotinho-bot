@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from bobotinho.cogs.dungeons import classes
-from bobotinho.database.models import Player
+from bobotinho.models import Player
 from bobotinho.utils import convert
 
 description = "Veja qual o seu level (ou de alguém) e outras estatísticas da dungeon"

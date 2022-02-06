@@ -2,10 +2,6 @@
 -r test.txt
 brunette
 flake8
-interrogate
-gitchangelog
 isort
-mkdocs
 mypy
 vulture
-watchgod

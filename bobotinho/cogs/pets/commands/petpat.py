@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from bobotinho.cogs.pets import join_pets
-from bobotinho.database.models import Pet
+from bobotinho.models import Pet
 
 description = "Faça carinho nos seus pets"
 
