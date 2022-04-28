@@ -6,13 +6,7 @@ from bobotinho.exceptions import InvalidName
 
 
 def username(name: str) -> str:
-    if name[0] == "@":
-        name = name[1:]
-    if name[-1] == ",":
-        name = name[:-1]
-    if not name.replace("_", "").isalnum():
-        raise InvalidName()
-    return name.lower()
+    return name.lstrip("@").rstrip(",").lower()
 
 
 class FunCog(Cog):
