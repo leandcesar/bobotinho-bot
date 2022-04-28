@@ -33,13 +33,6 @@ def txt2randomline(target: str) -> str:
     return random.choice(lines)
 
 
-def number2str(target: Union[int, float]) -> Optional[str]:
-    if isinstance(target, int):
-        return f"{target:,d}".replace(",", ".")
-    if isinstance(target, float):
-        return f"{target:,.2f}"[::-1].replace(",", ".").replace(".", ",", 1)[::-1]
-
-
 def str2ascii(target: str) -> str:
     return unidecode(target).lower().strip()
 
