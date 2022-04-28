@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import inspect
+import json
 import os
 from importlib import import_module, types
-from redis import Redis
-from tortoise import timezone
 from typing import Optional
+from redis import Redis
 
 from twitchio.ext.commands import (
     Bot,
@@ -25,7 +25,7 @@ from twitchio.message import Message
 from bobotinho import database, log
 from bobotinho.api import Api
 from bobotinho.analytics import Analytics
-from bobotinho.cache import TTLOrderedDict
+from bobotinho.commands import routine
 from bobotinho.database import Channel, User
 from bobotinho.exceptions import (
     BotIsOffline,
@@ -135,7 +135,6 @@ class TwitchBot(Bot):
             initial_channels=[config.dev]
         )
         self.config = config
-        self.boot_timestamp = timezone.now()
         self.dev = config.dev
         self.site = config.site_url
         self.blocked = []
@@ -144,11 +143,11 @@ class TwitchBot(Bot):
         self.channels = {}
         self.api = Api(config.api_key)
         self.analytics = Analytics(config.analytics_key)
-        self.cache = Redis.from_url(config.redis_url, encoding="utf-8", decode_responses=True) if config.redis_url else TTLOrderedDict()
-
-    @property
-    def boot_ago(self):
-        return timezone.now() - self.boot_timestamp
+        try:
+            self.cache = Redis.from_url(config.redis_url, encoding="utf-8", decode_responses=True)
+        except Exception as e:
+            log.warning(e)
+            self.cache = None
 
     async def start(self) -> None:
         await database.init(self.config.database_url)
@@ -159,7 +158,10 @@ class TwitchBot(Bot):
 
     async def stop(self) -> None:
         [routine.stop() for routine in self.routines]
-        self.cache.close()
+        self.new_channels.stop()
+        self.check_channels.cancel()
+        if self.cache is not None:
+            self.cache.close()
         await database.close()
         await self.close()
 
@@ -232,13 +234,17 @@ class TwitchBot(Bot):
     def load_cogs(self, base: str = "bobotinho/cogs") -> None:
         self.add_checks()
         for cog in os.listdir(base):
-            paths: str = os.listdir(os.path.join(base, cog))
-            if "commands" in paths:
-                self.load_commands(os.path.join(base, cog, "commands"))
-            if "listeners" in paths:
-                self.load_listeners(os.path.join(base, cog, "listeners"))
-            if "routines" in paths:
-                self.load_routines(os.path.join(base, cog, "routines"))
+            try:
+                paths = os.listdir(os.path.join(base, cog))
+            except NotADirectoryError:
+                self.load_module(os.path.join(base, cog)[:-3].replace("/", "."))
+            else:
+                if "commands" in paths:
+                    self.load_commands(os.path.join(base, cog, "commands"))
+                if "listeners" in paths:
+                    self.load_listeners(os.path.join(base, cog, "listeners"))
+                if "routines" in paths:
+                    self.load_routines(os.path.join(base, cog, "routines"))
 
     def add_channel(self, name, id, banwords=[], disabled=[], online=True) -> None:
         if name in self.channels:
@@ -372,3 +378,72 @@ class TwitchBot(Bot):
 
         await self.handle_listeners(ctx)
         await self.handle_commands(ctx)
+
+    # async def global_before_invoke(self, ctx: Context) -> None:
+    #     pass
+
+    # async def global_after_invoke(self, ctx: Context) -> None:
+    #     pass
+
+    # async def event_token_expired(self) -> None:
+    #     pass
+
+    # async def event_mode(self, channel: Channel, user: User, status: str) -> None:
+    #     pass
+
+    # async def event_userstate(self, user: User) -> None:
+    #     pass
+
+    # async def event_raw_usernotice(self, channel: Channel, tags: dict) -> None:
+    #     pass
+
+    # async def event_usernotice_subscription(self, metadata: NoticeSubscription) -> None:
+    #     pass
+
+    # async def event_part(self, user: User) -> None:
+    #     pass
+
+    # async def event_join(self, channel: Channel, user: User) -> None:
+    #     pass
+
+    # async def event_error(self, error: Exception, data: str = None) -> None:
+    #     traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+
+    @routine(seconds=20)
+    async def check_channels(self) -> None:
+        connected_channels = [channel.name for channel in self.connected_channels]
+        disconnected_channels = [channel for channel in self.channels if channel not in connected_channels]
+        for channel in disconnected_channels:
+            try:
+                await self.join_channels([channel])
+            except Exception:
+                # TODO: check if channel name is valid
+                pass
+
+    @routine(seconds=20)
+    async def new_channels(self) -> None:
+        # TODO: refactor
+        if cache is None:
+            # TODO: add warning log
+            return None
+        new_channels = self.cache.getset("new-channels", "")
+        if not new_channels:
+            return None
+        for new_channel in new_channels.split("\n"):
+            try:
+                new_channel = json.loads(new_channel)
+                user, _ = await User.update_or_create(
+                    id=int(new_channel["id"]), defaults={"name": new_channel["name"]}
+                )
+                channel, _ = await Channel.update_or_create(
+                    user_id=user.id, defaults={"followers": new_channel["followers"]}
+                )
+                self.add_channel(
+                    user.name,
+                    user.id,
+                    list(channel.banwords.keys()),
+                    list(channel.disabled.keys()),
+                    channel.online,
+                )
+            except Exception:
+                pass
