@@ -8,15 +8,13 @@ from bugsnag.handlers import BugsnagHandler
 
 
 class Log(Logger):
-    def __new__(cls, filename: str = None, dictionary: dict = {}, bugsnag: dict = {}, **kwargs) -> Logger:
+    def __new__(cls, *, filename: str = None, stage: str = None, version: str = None, bugsnag_key: str = None, **kwargs) -> Logger:
         if filename:
             cls.config_from_file(filename)
-        elif dictionary:
-            cls.config_from_dict(dictionary)
         else:
             cls.config_from_args(**kwargs)
         logger = logging.getLogger()
-        cls.inject_bugsnag_handler(logger, **bugsnag)
+        cls.inject_bugsnag_handler(logger, key=bugsnag_key, stage=stage, version=version)
         return logger
 
     @staticmethod
@@ -24,15 +22,11 @@ class Log(Logger):
         logging.config.fileConfig(filename)
 
     @staticmethod
-    def config_from_dict(dictionary: dict) -> None:
-        logging.config.dictConfig(dictionary)
-
-    @staticmethod
     def config_from_args(**kwargs) -> None:
         logging.basicConfig(**kwargs)
 
     @staticmethod
-    def inject_bugsnag_handler(logger: Logger, key: str = None, version: str = None, stage: str = None) -> None:
+    def inject_bugsnag_handler(logger: Logger, *, key: str = None, stage: str = None, version: str = None) -> None:
         if key:
             bugsnag.configure(app_version=version, api_key=key, release_stage=stage)
             extra_fields = {"log": ["__repr__"], "locals": ["locals"], "ctx": ["ctx"]}
